@@ -1,0 +1,43 @@
+
+Experiment folders (exported from xcellence) must contain no images other than the raw photographs from the microscope.
+Oher, non-image files are alowed.
+
+Drag the script (.ijm file) to the Fiji main window. It is open in the editor window.
+
+HOW TO PROCEED
+1. open experiment folder as stack (drag to Fiji main window)
+2. go to mitochondria channel
+3. establish region of interest
+4. run script by pressing Ctrl+R (with editor in focus) or "Run" buton in editor window
+
+{ script starts }
+
+0. ImageJ Options: Set Measurements
+	Area, Mean
+1. duplicate selection
+2. stack to images
+3. select window "mito"
+4. gaussian Blur; radius 0.5
+5. subtract background; radius 3
+6. set treshold; MANUAL, user prompted
+7. analyze particles; no filters, show nothing, add ROIs to manager
+8. select window "gfp"
+9. set LUT to Hi-Lo
+10. Gaussian blur; radius 0.5
+11. subtract background; MANUAL, user prompted
+12. put mito and gfp into stack (in that order)
+13. measure intensities of all ROIs in both channels
+	measurements appear in Results window
+	one row for each ROI, parent slice noted
+12. remove ROIs from manager
+13. split stack into individual images
+14. color images (gfp: green, mito: yellow, trans: grey) and adjust histogram
+15. wrap them back into a stack (gfp, mito and trans)
+16. make montage with dark grey borders
+17. save montage
+18. close all windows except the original stack
+
+{ script terminates }
+
+Once the script terminates, select another ROI or switch to the next experiment.
+Measurement results can be copied to an external file at any time.
