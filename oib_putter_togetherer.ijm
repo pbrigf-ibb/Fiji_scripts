@@ -4,19 +4,21 @@
 
 // update 21 November 2018	bug fixes
 // update 15 January 2019	bug fixes in make_color function
+// update 14 June 2019		introduced support for single z slices
+//							documentation update
 
  
 /* This is a script for preparing figures from confocal images.
  *  
- * It is written for z-stacks collected with Olympus software and saved in the .oib or .oif formats.
+ * It is written for images collected with Olympus software and saved in the .oib or .oif formats.
  * It is assumed that multiple channels are present. One of them may be transmitted light (hereafter referred to as DIC).
  * DIC channel must be specified by the user, if present.
  * 
- * Fluorescence channels will be converted into maximum intensity projections.
+ * In z stacks fluorescence channels will be converted into maximum intensity projections.
  * For DIC only one slice will be extracted. The slice will be chosen either as an option or as a specific slice number.
  * (IMPORTANT: it is asumed that z-stacks begin above the cell and end where the cell is attached to the glass.)
  * 
- * The script consists of four parts, which are nto entirely indepedent, i.e. some variables are used in down the line.
+ * The script consists of four parts, which are not entirely indepedent, i.e. some variables are used in down the line.
  * 
  * A number of functions are used throughout the sicript.
  * All function definitions are found at the end, after an exit() statement.
@@ -37,27 +39,32 @@
  * If the subdirectories don't exist, they will be created and all .oib files will be moved to the input directory.
  * 
  * PART ONE: Z projections.
- * Each file is loaded, split into separate channels, and channel are treated accordingly.
- * Fluorescence channel are maxz-projected, one frame is selected form the DIC channel.
- * New images are saved in the temp directory.
  * Slide names are extracted from file names (extensions are stripped).
+ * Each file is loaded, split into separate channels.
+ * Channles are optionally processed.
+ * If the image is a z stack, fluorescence channels are maxz-projected, and one frame is selected form the DIC channel.
+ * New images are saved in the temp directory.
  * New files are named with slide names with channel numbers (1+) appended.
  * 
  * PART TWO: Contrast.
  * To enable consistent presentation, a common LUT will be applied to all images in each channel.
  * All images from a channel are loaded as stack, their (common) histogram is clipped by 0.25%.
- * Files will be-resaved in the temp directory.
+ * Files are re-resaved in the temp directory.
  * 
  * PART THREE: Single montages.
  * A montage is created for each slide; single row, channels in columns.
- * Just in case the DIC channel is not the last one, it will be taken out of the stack and concatenated at the end.
+ * The DIC image will be placed last.
  * Images are saved in .tiff format in the results directory.
  * 
  * PART FOUR
  * General montage.
  * A montage of all images is created; channels in rows, images in columns.
  * All single montages obtained in PART THREE are loaded and combined into a single montage.
- * Slide names are added as text labels.
+ * Slide names can be added as text labels.
+ * Channel names can be added as text labels. They will be in the same color as their channel LUT.
+ * If channel overlays are requested, channel labels will be disabled.
+ *   This is because the user can specify any order of channel and overlay panels 
+ *   and I do not know how to apply that order to the labels.
  * The file is saved in the results directory.
  * Since the image does not require great quality, it is saved as a .jpeg, following optional scaling.
  * 
@@ -72,11 +79,11 @@
 // prepare some messages
 message_0 = "Welcome to the .oib putter togetherer.\n";
 message_1 = "For code and documentation look up \"oib_putter_togetherer.ijm\".\n \n";
-message_2 = "We will convert Z stacks to montages of maximum intensity projections.\n";
-message_3 = "The images can be pre-processed by applying median blur and/or rolling ball background subtraction.\n";
-message_4 = "We will then create a montage of all images so they can be compared easily.\n";
-message_5 = "The putter togetherer is compatible with stacks acquired with Olympus CLSM systems saved in .oib and .oif formats.\n";
-message_6 = "XYZC stacks are supported. As of 21 September 2018, time-lapse is not.\n";
+message_2 = "We will create a montage of all images so they can be compared easily.\n";
+message_3 = "Images can be pre-processed by applying median blur and/or rolling ball background subtraction.\n";
+message_4 = "Z stacks will be converted to maximum intensity projections.\n";
+message_5 = "The putter togetherer is compatible with images acquired with Olympus CLSM systems saved in .oib and .oif formats.\n";
+message_6 = "XYC and XYZC stacks are supported. As of 21 September 2018, time-lapse is not.\n";
 message_7 = "It is crucial that all your stacks have the same xy pixel dimensions.\n";
 
 message_8 = "Declare the master folder where your files are stored.\n";
@@ -225,19 +232,16 @@ for (f = 0; f < files.length; f++) {
 	// get channel names
 	channel_names = getList("image.titles");
 	
-	/* for all channels (except DIC):
+	/* for all channels:
 	 *		apply median blur, if requested
 	 *		apply rolling ball background subtraction, if requested
-	 *		create maximum intensity projection
-	 * close original stack
+	 *		if z stacks, create maximum intensity projection (for DIC just select a slice)
+	 * close original image
 	 */
-	for (i = 0; i < channels; i++) {
-		selectWindow(channel_names[i]);
-		if (i == DIC_channel - 1) {
-			// isolate one slice from DIC channel stack
-			option_for_substack = " slices=" + DIC_slice;
-			run("Make Substack...", option_for_substack);
-		} else {
+
+	if (slices == 1) {
+		for (i = 0; i < channels; i++) {
+			selectWindow(channel_names[i]);
 			// apply blur
 			if (blur[i]) {
 				option_for_blur = "radius=" + blur_radii[i] + " stack";
@@ -248,13 +252,36 @@ for (f = 0; f < files.length; f++) {
 				option_for_backgroud = "rolling=" + ball_radii[i] + " stack";
 				run("Subtract Background...", option_for_backgroud);
 			}
-			// create maximum intensity projection
-			if (slices > 1) run("Z Project...", "projection=[Max Intensity]");
-			}
-		selectWindow(channel_names[i]);
-		close();
+		}
+	} else if (slices > 1) {
+		for (i = 0; i < channels; i++) {
+			selectWindow(channel_names[i]);
+			if (i == DIC_channel - 1) {
+				// isolate one slice from DIC channel stack
+				option_for_substack = " slices=" + DIC_slice;
+				run("Make Substack...", option_for_substack);
+			} else {
+				// apply blur
+				if (blur[i]) {
+					option_for_blur = "radius=" + blur_radii[i] + " stack";
+					run("Median...", option_for_blur);
+				}
+				// apply backgroud subtraction
+				if (subtract[i]) {
+					option_for_backgroud = "rolling=" + ball_radii[i] + " stack";
+					run("Subtract Background...", option_for_backgroud);
+				}
+				// create maximum intensity projection
+				if (slices > 1) run("Z Project...", "projection=[Max Intensity]");
+				}
+			selectWindow(channel_names[i]);
+			close();
+		}
+	} else {
+		exit("0 slices?");
 	}
 
+	
 	// get projection names
 	projection_names = getList("image.titles");
 	// save each image as a tiff file in the temp directory and close it
@@ -458,12 +485,14 @@ if (labels != "no") {
 		                      colors[DIC_channel-1]);
 	}
 	// determine font size
-	channel_label_lengths = newArray(channels);
-	for (i = 0; i < channels; i++) channel_label_lengths[i] = lengthOf(channel_labels[i]);
-	max_label_length = maximum(channel_label_lengths);
-	// set font such that the longest label will take 1/2 of the panel width
-	font_size = floor(width * 0.5 / max_label_length);
-	font_size = floor(font_size * scale_factor);
+	font_size = floor(height / 15 * scale_factor);
+/*	channel_label_lengths = newArray(channels);
+*	for (i = 0; i < channels; i++) channel_label_lengths[i] = lengthOf(channel_labels[i]);
+*	max_label_length = maximum(channel_label_lengths);
+*	// set font such that the longest label will take 1/2 of the panel width
+*	font_size = floor(width * 0.5 / max_label_length);
+*	font_size = floor(font_size * scale_factor);
+*/
 	// set format
 	setFont("Monospace", font_size , "bold");
 	// determine coordinates for the labels
@@ -519,110 +548,6 @@ exit("Script complete.");
 ////////////////////////////////
 ///// FUNCTION DEFINITIONS /////
 ////////////////////////////////
-
-function any_oibs(folder) {
-// check in there are any .oib files in a directory
-	files = getFileList(folder);
-	for (i = 0; i < files.length; i++) {
-		if (endsWith(files[i], "\.oib") || endsWith(files[i], "\.oif")) return(true);
-	}
-	return false;
-}
-
-
-function DIC_slicer(slices, level) {
-// determine which slice to select from DIC stack
-// used in PART ONE
-
-	if (level == "Top") {
-		DIC_slice = 1;
-	} else if (level == "High") {
-		DIC_slice = floor(slices * 1/3 + 1/3);
-	} else if (level == "Middle") {
-		DIC_slice = floor(slices * 1/2 + 0.5);
-	} else if (level == "Low") {
-		DIC_slice = floor(slices * 2/3 + 1/3);
-	} else if (level == "Bottom") {
-		DIC_slice = slices;
-	} else DIC_slice = parseFloat(slices);
-	return DIC_slice;
-}
-
-
-function adjust_histogram(saturation) {
-// get new histogram borders, based on the entire stack; use montage to display all images at once
-// prepare option for montage
-	option_for_montage = "columns=" + nSlices + " rows=1 scale=1";
-	run("Make Montage...", option_for_montage);
-// prepare option for contrast
-	option_for_contrast = "saturated=" + saturation * nSlices;
-	run("Enhance Contrast", option_for_contrast);
-// get histogram borders from montage
-	getMinAndMax(min, max);
-// close montage
-	close("Montage");
-// set histogram borders for stack
-	setMinAndMax(min, max);
-}
-
-
-function make_LUT(color) {
-// convenience function to select a LUT
-// used in PART TWO
-
-// by default the LUT will be "Gray"
-	reds = newArray(256); greens = newArray(256); blues = newArray(256);
-	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; }
-// custom colours
-	if (color == "Hoechst" || color == "hoechst" || color == "DNA" || color == "#3faaff") {
-    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
-	} else if (color == "Blue-ish" || color == "blue-ish" || color == "Blueish" ||color == "blueish" || color == "#3faaff") {
-    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
-	} else if (color == "Yellow-ish" || color == "yellow-ish" || color == "Yellowish" ||color == "yellowish" || color == "#ffff3f") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = floor(i * 1/4); }
-	} else if (color == "Green-ish" || color == "green-ish" || color == "Greenish" ||color == "greenish" || color == "#0ff55") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = floor(i * 1/3); }
-	} else if (color == "Red-ish" || color == "red-ish" || color == "Redish" || color == "redish" || color == "#ff3333") {
-	    for (i=0; i<256; i++) { reds[i] = i; greens[i] = floor(i * 1/5); blues[i] = floor(i * 1/5); }
-	}
-// standard colors
-	else if (color == "Red" || color == "red" || color == "#ff00") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = 0; }
-	} else if (color == "Green" || color == "green" || color == "#0ff0") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = 0; }
-	} else if (color == "Blue" || color == "blue" || color == "#00ff") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = 0; blues[i] = i; }
-	} else if (color == "Cyan" || color == "cyan" || color == "#0ffff") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = i; }
-	} else if (color == "Magenta" || color == "magenta" || color == "#ff0ff") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = i; }
-	} else if (color == "Yellow" || color == "yellow" || color == "#ffff0") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = 0; }
-	} else if (color == "Hi-Lo" || color == "HiLo" || color == "hi-lo" || color == "hilo") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; blues[0] = 255; greens[255] = 0; blues[255] = 0; }
-	}
-	setLut(reds, greens, blues);
-}
-
-
-function make_color(color){
-// make hex codes of colors named by string
-	// built-in colors
-	if (color == "red") return "#" + toHex(255) + "00" + "00";
-	if (color == "green") return "#" + "00" + toHex(255) + "00";
-	if (color == "blue") return "#" + "00" + "00" + toHex(255);
-	if (color == "cyan") return "#" + "00" + toHex(255) + toHex(255);
-	if (color == "magenta") return "#" + toHex(255) + "00" + toHex(255);
-	if (color == "yellow") return "#" + toHex(255) + toHex(255) + "00";
-	if (color == "gray") return "#" + toHex(255) + toHex(255) + toHex(255);
-	if (color == "Hi-Lo") return "#" + toHex(255) + toHex(255) + toHex(255);
-	// custom colors
-	if (color == "redish") return "#" + toHex(255) + toHex(255 * 1/5) + toHex(255 * 1/5);
-	if (color == "greenish") return "#" + "00" + toHex(255) + toHex(255 * 1/3);
-	if (color == "blueish") return "#" + toHex(255 * 1/4) + toHex(255 * 2/3) + toHex(255);
-	if (color == "yellowish") return "#" + toHex(255) + toHex(255) + toHex(255 * 1/4);	
-}
-
 
 /// SET OF UI FUNCTIONS FOR USER DEFINED PARAMETERS
 function labels_input() {
@@ -757,26 +682,126 @@ function overlay_output() {
 	overlay_options = Array.concat(channels_include, channels_overlay_colors, panel_order);
 	return overlay_options;
 }
-//// END UI FUNCTIONS
+/// END UI FUNCTIONS
 
 
-function interleave(array1, array2) {
-// interleave two arrays
-	if (array1.length <= array2.length) {shorter = array1; longer = array2;} else {longer = array1; shorter = array2;}
-	A = newArray();
-	for (i = 0; i < shorter.length; i++) A = Array.concat(A, array1[i], array2[i]);
-	leftovers = Array.slice(longer, shorter.length ,longer.length);
-	Al = Array.concat(A, leftovers);
-	return Al;
+/// INTERNAL FUNCTIONS
+
+function DIC_slicer(slices, level) {
+// determine which slice to select from DIC stack
+// used in PART ONE
+	if (level == "Top") {
+		DIC_slice = 1;
+	} else if (level == "High") {
+		DIC_slice = floor(slices * 1/3 + 1/3);
+	} else if (level == "Middle") {
+		DIC_slice = floor(slices * 1/2 + 0.5);
+	} else if (level == "Low") {
+		DIC_slice = floor(slices * 2/3 + 1/3);
+	} else if (level == "Bottom") {
+		DIC_slice = slices;
+	} else DIC_slice = parseFloat(slices);
+	return DIC_slice;
 }
 
 
-function unsplit(arr, sep) {
-//concatenate elements of array with separator
-	x = arr;
-	y = x[0];
-	for (i = 1; i < x.length; i++) y = y + sep + x[i];
-	return y;
+function adjust_histogram(saturation) {
+// get new histogram borders, based on the entire stack; use montage to display all images at once
+// prepare option for montage
+	option_for_montage = "columns=" + nSlices + " rows=1 scale=1";
+	run("Make Montage...", option_for_montage);
+// prepare option for contrast
+	option_for_contrast = "saturated=" + saturation * nSlices;
+	run("Enhance Contrast", option_for_contrast);
+// get histogram borders from montage
+	getMinAndMax(min, max);
+// close montage
+	close("Montage");
+// set histogram borders for stack
+	setMinAndMax(min, max);
+}
+
+
+function make_LUT(color) {
+// convenience function to select a LUT
+// used in PART TWO
+
+// by default the LUT will be "Gray"
+	reds = newArray(256); greens = newArray(256); blues = newArray(256);
+	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; }
+// custom colours
+	if (color == "Hoechst" || color == "hoechst" || color == "DNA" || color == "#3faaff") {
+    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
+	} else if (color == "Blue-ish" || color == "blue-ish" || color == "Blueish" ||color == "blueish" || color == "#3faaff") {
+    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
+	} else if (color == "Yellow-ish" || color == "yellow-ish" || color == "Yellowish" ||color == "yellowish" || color == "#ffff3f") {
+    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = floor(i * 1/4); }
+	} else if (color == "Green-ish" || color == "green-ish" || color == "Greenish" ||color == "greenish" || color == "#0ff55") {
+    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = floor(i * 1/3); }
+	} else if (color == "Red-ish" || color == "red-ish" || color == "Redish" || color == "redish" || color == "#ff3333") {
+	    for (i=0; i<256; i++) { reds[i] = i; greens[i] = floor(i * 1/5); blues[i] = floor(i * 1/5); }
+	}
+// standard colors
+	else if (color == "Red" || color == "red" || color == "#ff00") {
+    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = 0; }
+	} else if (color == "Green" || color == "green" || color == "#0ff0") {
+    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = 0; }
+	} else if (color == "Blue" || color == "blue" || color == "#00ff") {
+    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = 0; blues[i] = i; }
+	} else if (color == "Cyan" || color == "cyan" || color == "#0ffff") {
+    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = i; }
+	} else if (color == "Magenta" || color == "magenta" || color == "#ff0ff") {
+    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = i; }
+	} else if (color == "Yellow" || color == "yellow" || color == "#ffff0") {
+    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = 0; }
+	} else if (color == "Hi-Lo" || color == "HiLo" || color == "hi-lo" || color == "hilo") {
+    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; blues[0] = 255; greens[255] = 0; blues[255] = 0; }
+	}
+	setLut(reds, greens, blues);
+}
+
+
+function make_color(color){
+// make hex codes of colors named by string
+	// built-in colors
+	if (color == "red") return "#" + toHex(255) + "00" + "00";
+	if (color == "green") return "#" + "00" + toHex(255) + "00";
+	if (color == "blue") return "#" + "00" + "00" + toHex(255);
+	if (color == "cyan") return "#" + "00" + toHex(255) + toHex(255);
+	if (color == "magenta") return "#" + toHex(255) + "00" + toHex(255);
+	if (color == "yellow") return "#" + toHex(255) + toHex(255) + "00";
+	if (color == "gray") return "#" + toHex(255) + toHex(255) + toHex(255);
+	if (color == "Hi-Lo") return "#" + toHex(255) + toHex(255) + toHex(255);
+	// custom colors
+	if (color == "redish") return "#" + toHex(255) + toHex(255 * 1/5) + toHex(255 * 1/5);
+	if (color == "greenish") return "#" + "00" + toHex(255) + toHex(255 * 1/3);
+	if (color == "blueish") return "#" + toHex(255 * 1/4) + toHex(255 * 2/3) + toHex(255);
+	if (color == "yellowish") return "#" + toHex(255) + toHex(255) + toHex(255 * 1/4);	
+}
+
+
+function fg_color(color) {
+// set foreground color according to choice in main options window
+	if (color == "black") setForegroundColor(0, 0, 0);
+	if (color == "gray10") setForegroundColor(25, 25, 25);
+	if (color == "gray25") setForegroundColor(64, 64, 64);
+	if (color == "gray50") setForegroundColor(127, 127, 127);
+	if (color == "gray75") setForegroundColor(192, 192, 192);
+	if (color == "white") setForegroundColor(255, 255, 255);
+}
+
+/// END INTERNAL FUNCTIONS
+
+
+
+
+function any_oibs(folder) {
+// check in there are any .oib files in a directory
+	files = getFileList(folder);
+	for (i = 0; i < files.length; i++) {
+		if (endsWith(files[i], "\.oib") || endsWith(files[i], "\.oif")) return(true);
+	}
+	return false;
 }
 
 
@@ -813,14 +838,23 @@ function copy_all(path1, path2) {
 }
 
 
-function fg_color(color) {
-// set foreground color according to choice in main options window
-	if (color == "black") setForegroundColor(0, 0, 0);
-	if (color == "gray10") setForegroundColor(25, 25, 25);
-	if (color == "gray25") setForegroundColor(64, 64, 64);
-	if (color == "gray50") setForegroundColor(127, 127, 127);
-	if (color == "gray75") setForegroundColor(192, 192, 192);
-	if (color == "white") setForegroundColor(255, 255, 255);
+function interleave(array1, array2) {
+// interleave two arrays
+	if (array1.length <= array2.length) {shorter = array1; longer = array2;} else {longer = array1; shorter = array2;}
+	A = newArray();
+	for (i = 0; i < shorter.length; i++) A = Array.concat(A, array1[i], array2[i]);
+	leftovers = Array.slice(longer, shorter.length ,longer.length);
+	Al = Array.concat(A, leftovers);
+	return Al;
+}
+
+
+function unsplit(arr, sep) {
+//concatenate elements of array with separator
+	x = arr;
+	y = x[0];
+	for (i = 1; i < x.length; i++) y = y + sep + x[i];
+	return y;
 }
 
 
