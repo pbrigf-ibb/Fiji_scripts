@@ -111,41 +111,6 @@ function copy_all(path1, path2) {
 
 // select a LUT
 function make_LUT(color) {
-// create 'Gray" for default value
-	reds = newArray(256); greens = newArray(256); blues = newArray(256);
-	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; }
-// custom colours
-	if (color == "Hoechst" || color == "hoechst" || color == "DNA" || color == "#3faaff") {
-    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
-	} else if (color == "Blue-ish" || color == "blue-ish" || color == "Blueish" ||color == "blueish" || color == "#3faaff") {
-    	for (i=0; i<256; i++) { reds[i] = floor(i * 1/4); greens[i] = floor(i * 2/3); blues[i] = i; }
-	} else if (color == "Yellow-ish" || color == "yellow-ish" || color == "Yellowish" ||color == "yellowish" || color == "#ffff3f") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = floor(i * 1/4); }
-	} else if (color == "Green-ish" || color == "green-ish" || color == "Greenish" ||color == "greenish" || color == "#0ff55") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = floor(i * 1/3); }
-	} else if (color == "Red-ish" || color == "red-ish" || color == "Redish" || color == "redish" || color == "#ff3333") {
-	    for (i=0; i<256; i++) { reds[i] = i; greens[i] = floor(i * 1/5); blues[i] = floor(i * 1/5); }
-	}
-// standard colors
-	else if (color == "Red" || color == "red" || color == "#ff00") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = 0; }
-	} else if (color == "Green" || color == "green" || color == "#0ff0") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = 0; }
-	} else if (color == "Blue" || color == "blue" || color == "#00ff") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = 0; blues[i] = i; }
-	} else if (color == "Cyan" || color == "cyan" || color == "#0ffff") {
-    	for (i=0; i<256; i++) { reds[i] = 0; greens[i] = i; blues[i] = i; }
-	} else if (color == "Magenta" || color == "magenta" || color == "#ff0ff") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = 0; blues[i] = i; }
-	} else if (color == "Yellow" || color == "yellow" || color == "#ffff0") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = 0; }
-	} else if (color == "Hi-Lo" || color == "HiLo" || color == "hi-lo" || color == "hilo") {
-    	for (i=0; i<256; i++) { reds[i] = i; greens[i] = i; blues[i] = i; blues[0] = 255; greens[255] = 0; blues[255] = 0; }
-	}
-	setLut(reds, greens, blues);
-}
-
-function makeLUT(color) {
 // create gray as default
 	reds = newArray(256); greens = newArray(256); blues = newArray(256);
 	red = 1; green = 1; blue = 1;
@@ -161,7 +126,7 @@ function makeLUT(color) {
 	else if (color == "redish" || color == "Red-ish" || color == "red-ish" || color == "Redish" || color == "#ff3333") {
 		green = 1/5; blue = 1/5;}
 	else if (color == "greenish" || color == "Green-ish" || color == "green-ish" || color == "Greenish" || color == "#0ff55") {
-		blue = 1/3;}
+		red = 0; blue = 1/3;}
 	else if (color == "blueish" || color == "Blue-ish" || color == "blue-ish" || color == "Blueish" || color == "#3faaff") {
 		red = 1/4; green = 2/3;}
 	else if (color == "yellowish" || color == "Yellow-ish" || color == "yellow-ish" || color == "Yellowish" || color == "#ffff3f") {
